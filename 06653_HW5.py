@@ -5,6 +5,7 @@ from pyomo.environ import *
 
 def build_model(args):
     """
+    building models
     args: input arguments
     """
     m = ConcreteModel()
@@ -76,9 +77,13 @@ def build_model(args):
         return sum(m.x[i,j] for j in m.V) - sum(m.x[j,i] for j in m.V) == -m.D[i] 
     m.Eq4 = Constraint(m.Vd, rule=_Eq4, doc= 'Market constraint')
 
+    # Objective variable
     m.cost = Var(domain = NonNegativeReals)
 
     def _Eq5(m):
+        """
+        A safe way to do double summation of double index variable
+        """
         tmp = 0
         for i in m.V:
             for j in m.V:
@@ -93,6 +98,9 @@ def build_model(args):
     return m
 
 def init_model(m):
+    """
+    Initializing model by setting bounds
+    """
     for (i,j) in (m.V*m.V):
         if (i,j) in m.A:
             # print(i,j)
@@ -104,6 +112,9 @@ def init_model(m):
     return 
 
 def get_data(tab):
+    """
+    Reading data from excel, dealing with unavailable links
+    """
     args = {} 
     args['V'] = [i for i in range(1,8)] 
     args['Vs'] = [i for i in range(1,4)] 
@@ -129,24 +140,23 @@ dat = get_data('HW5_data.xlsx')
 m = build_model(dat)
 init_model(m)
 
+# Specifying solvers and solver options
 opt = SolverFactory('gams')
 io_options = dict() 
-
 io_options['solver'] = "cplex"
 
 res = opt.solve(m,
     tee=True,
     keepfiles=True,
     symbolic_solver_labels=True,
-    #add_options = ['GAMS_MODEL.optfile = 1; option reslim=120; option optcr=0.0;'],
     add_options = ['option reslim=180; option optcr=0.0;'],
     tmpdir='/home/zyuliu/06653',
     io_options=io_options)
-# print(value(sum(sum(m.c[i,j]*m.x[i,j] for i in m.V) for j in m.V)))
+
+m.x.pprint()
 
 #Exporting to excel
 res_list = []
-
 for i in m.V:
     row = []
     for j in m.V:
@@ -157,7 +167,7 @@ df1 = pd.DataFrame(res_list)
 with pd.ExcelWriter('HW5_result.xlsx') as writer:  
     df1.to_excel(writer)
 
+# Getting infeasible constraints, if any
 print('printing infeasible constraints')
-
 from pyomo.util.infeasible import log_infeasible_constraints
 log_infeasible_constraints(m)
